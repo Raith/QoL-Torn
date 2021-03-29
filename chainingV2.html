@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>FR13 | Chaining</title>
+    <!-- The style.css file allows you to change the look of your web pages.
+If you include the next line in all your web pages, they will all share the same look.
+This makes it easier to make new pages for your site. -->
+    <link href="/style.css" rel="stylesheet" type="text/css" media="all">
+    <style>
+      th {
+        text-align: left;
+      }
+      a {
+        text-decoration: none;
+      }
+      a:link, a:visited {
+        color: blue;
+      }
+      a:hover {
+        color: red;
+      }
+      m {
+        text-align: center;
+      }
+      .outline {
+        margin: 0px; border: 1px solid #000000
+      }
+      .frmt {
+        margin: 0px; padding: 5px; border-bottom: 1px solid #000000
+      }
+      .odd {
+        background-color: white;
+      }
+      .even{
+        background-color: lightgray;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="frmt" style="text-align:center">
+      <a href='index.html'>Home</a> | <a href='targets.html'>Targets</a> | <a href='members.html'>Members</a> | <a href='items.html'>Items</a> | <strong><a href='chainingV2.html'>Chaining (WIP)</a></strong>
+    </div>
+    <div class="frmt">
+      Your API key:<input id="apiInput" type="text" value="">
+      Faction ID:<input id="factionIDInput" type="text" value="">
+      <button onclick="buildTable()">Load/Refresh</button>
+      Autorefresh<input id="updateCheckbox" type="checkbox" value=""> Update cooldown:<label id="updateCooldown">N/A</label>
+    </div>
+    <div class="frmt" style="text-align: left">
+      <div style="display: inline-block; width: 49%; vertical-align: text-top">
+        Chain started at: <br/>
+        Date:<input id="chainDateStart" type="date" value=""> Time:<input id="chainTimeStart" type="time" value=""> <br/>
+        Unix timestamp: <input id="unixStartTime" type="text" value="">
+      </div>
+      <div style="display: inline-block; width: 49%; vertical-align: text-top">
+        Chain ended at: (Ongoing<input id="ongoingCheckbox" type="checkbox" value="">)<br/>
+        Date:<input id="chainDateEnd" type="date" value=""> Time:<input id="chainTimeEnd" type="time" value=""> <br/>
+        Unix timestamp: <input id="unixStopTime" type="text" value="">    
+      </div>
+    </div>
+    <div class="frmt">
+      Sort by:<input type="radio" name="sortColumn" value="name">Name
+      <input type="radio" name="sortColumn" value="hits">Hits
+      <input type="radio" name="sortColumn" value="lvl">Level
+      <button onclick="">A-Z</button>
+      <button onclick="">Z-A</button>
+    </div>
+    <div class="frmt">
+      <table id="members" style="width:100%">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>ID</th>
+            <th>Hits</th>
+            <th>Mail</th>
+          </tr>
+          <thead>
+        <tbody>
+        </tbody>
+      </table>
+    </div>
+    <div class="frmt">
+      <button id="clearCookies" style="margin:auto; display:block" onclick="clearCookies()">Clear cookies</button>
+      <button onclick="" style="margin:auto; display:block">Get current time</button>
+    </div>
+    <div style="text-align:center; padding: 5px">
+      Questions? Ask <a href='https://www.torn.com/profiles.php?XID=2131931#/'>Raith [2131931]</a>.
+    </div>
+
+    <!--
+specification:
+- DATA[] is an array of all faction members, initiated as [name, id, hits = [won=0, lost=0, stale=0, out=0]] or simplified [name, id, hits]
+- START starts the timer
+- get log every 60 seconds, if STARTED
+- filter log by lastAttackID, if lastAttackID = 0 then set it the latest attack (just STARTED), if lastAttackID does not match anything, process whole log (more than 1k attacks happened since last update)
+- update DATA[].hits[]/hits with everything from lastAttackID+1 to latest attack (hits are ADDED to old values as time goes on)
+- set lastAttackID to latest attack
+- save DATA[] to cookie in case the browser is closed (OPTIONAL, unneccessary if only used LIVE)
+- repeat
+
+- if browser is closed STARTED flag is not reset, if reopened everything continues working and tries to catch up
+- DATA[] is cleared on START
+- DATA[] is kept after STOP
+- lastAttackID is set to zero after STOP
+
+TODO
+mails to members page
+color coding red 0 hits, yellow <40, green 40+; same for offline times
+sorting by lvl/name/hits
+
+-->
+
+    <script>
+      var state = "";
+      var lastAttackID = 0;
+      var updateTimerID = 0;
+      var displayTimerID = 0;
+      var time = 0;
+      var tempTime = 0;
+      var data = [];
+      var resp = null;
+
+      //temp
+      var totalAttacks = 0;
+      var totalOurAttacks = 0;
+
+      document.getElementById("apiInput").value = readAPIKey();
+      document.getElementById("factionIDInput").value = readFactionID();
+      state = readChainState();
+
+
+      function processData() {
+
+        oneHour = 60*60;
+
+        fetch('https://api.torn.com/faction/11428?selections=attacksfull&from=1538838076&to=1538934330&key=ldeEFPqTRs4ES3bR')
+          .then(function(response){return response.json();})
+          .then(function(myjson){
+
+          data = [];
+          totalAttacks = 0;
+          totalOurAttacks = 0;
+          for (var id in myjson.attacks) {
+            totalAttacks++;
+            var entry = myjson.attacks[id];
+            if (entry.attacker_faction == 11428) {
+              // && entry.result != 'Stalemate' && entry.result != 'Lost' && entry.result != 'Timeout') {
+              data.push(entry);
+              totalOurAttacks++;
+            }
+          }
+
+          console.log(totalOurAttacks+'/'+totalAttacks);
+        });
+
+      }
+
+      function buildTable() {
+        storeAPIKey();
+        storeFactionID();
+
+        members = document.getElementById("members");
+        apiKeyValue = document.getElementById("apiInput").value;
+        factionIDValue = document.getElementById("factionIDInput").value;
+
+        rowCount = members.rows.length;
+        while(--rowCount) members.deleteRow(rowCount); 
+
+        if (readAPIKey() <= 0) {
+          if (apiKeyValue <= 0) {
+            return; 
+          }
+        }
+
+        if (readFactionID() <= 0) {
+          if (factionIDValue <= 0) {
+            return;
+          }
+        }
+
+        processData();
+
+        fetch('https://api.torn.com/faction/'+readFactionID()+'?selections=&key='+readAPIKey())
+          .then(function(response){return response.json();})
+          .then(function(myjson){
+          m = myjson.members;
+
+          for (var prop in myjson.members) {
+            member = myjson.members[prop];
+
+            row = members.insertRow(1);
+
+            row.insertCell(0).innerHTML = member.name;
+            row.insertCell(1).innerHTML = prop;
+
+            var counter = 0;
+            for (var entry in data) {
+              if (data[entry].attacker_id == prop) {
+                counter++;
+
+              }
+            }
+
+            row.insertCell(2).innerHTML = counter;
+
+
+
+            sortTable();
+
+            alternate('members');
+          };
+        });
+      }
+
+      function updateTime() {
+        document.getElementById("State").innerHTML = state + " ("+(60 - (++time % 60))+")";
+        if (time > 6000) {
+          time -= 6000;
+        }
+      }
+
+      function startChain() {
+        state = "Active";
+        document.getElementById("State").innerHTML = state + " ("+60+")";
+        storeChainState(state);
+
+        document.getElementById("startChain").disabled = true;
+        document.getElementById("stopChain").disabled = false;
+
+        //run processData for the first time
+        buildTable();
+
+        //start the timers: setInterval(function, delay)
+        time = 0;
+        updateTimerID = setInterval("buildTable()", 60000);
+        displayTimerID = setInterval("updateTime()" , 1000)
+
+        //set latest ID and store it as cookie
+      }
+
+      function stopChain() {
+        state = "Inactive";
+        document.getElementById("State").innerHTML = state;
+        storeChainState(state);
+
+        document.getElementById("startChain").disabled = false;
+        document.getElementById("stopChain").disabled = true;
+
+        //stop timers
+        clearInterval(updateTimerID);
+        clearInterval(displayTimerID);
+
+        //reset latest ID to 0 and store it as cookie
+        lastAttackID = 0;
+      }
+
+      function sortTable() {
+        var table, rows, switching, i, x, y, shouldSwitch;
+        table = document.getElementById("members");
+        switching = true;
+        /*Make a loop that will continue until
+  		no switching has been done:*/
+        while (switching) {
+          //start by saying: no switching is done:
+          switching = false;
+          rows = table.rows;
+          /*Loop through all table rows (except the
+    	  first, which contains table headers):*/
+          for (i = 1; i < (rows.length - 1); i++) {
+            //start by saying there should be no switching:
+            shouldSwitch = false;
+            /*Get the two elements you want to compare,
+      		one from current row and one from the next:*/
+            x = rows[i].getElementsByTagName("td")[0];
+            y = rows[i + 1].getElementsByTagName("td")[0];
+            //check if the two rows should switch place:
+            if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+              //if (parseInt(x.innerHTML) < parseInt(y.innerHTML)) {
+              //if so, mark as a switch and break the loop:
+              shouldSwitch = true;
+              break;
+            }
+          }
+          if (shouldSwitch) {
+            /*If a switch has been marked, make the switch
+      		and mark that a switch has been done:*/
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+          }
+        }
+      }
+
+      function setCookie(name, value) {
+        today = new Date();
+        expiry = new Date(today.getTime() + 30 * 24 * 3600 * 1000); // plus 30 days
+        document.cookie=name + "=" + escape(value) + "; path=/; expires=" + expiry.toGMTString();
+      }
+
+      function getCookie(name) {
+        re = new RegExp(name + "=([^;]+)");
+        value = re.exec(document.cookie);
+        return (value != null) ? unescape(value[1]) : null;
+      }
+
+      function deleteCookie(name) {
+        today = new Date();
+        expired = new Date(today.getTime() - 24 * 3600 * 1000);
+        document.cookie = name + "=null; path=/; expires=" + expired.toGMTString();
+      }
+
+      function clearCookies() {
+        deleteCookie("apiKey");
+      }
+
+      function storeChainState(value) {
+        setCookie("chainState", value);
+      }
+
+      function readChainState() {
+        return getCookie("chainState");
+      }
+
+      function storeAPIKey() {        
+        setCookie("apiKey", document.getElementById("apiInput").value);
+      }
+
+      function readAPIKey() {
+        return getCookie("apiKey");
+      }
+
+      function storeFactionID() {
+        setCookie("factionID", document.getElementById("factionIDInput").value);
+      }
+
+      function readFactionID() {
+        return getCookie("factionID");
+      }
+
+      function isNumeric(n) {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+      }
+
+      function alternate(id) {
+        if (document.getElementsByTagName) {
+          var table = document.getElementById(id);
+          var rows = table.getElementsByTagName("tr");
+
+          for (i = 0; i < rows.length; i++) {
+            if (i != 0 && i % 2 == 0) {
+              rows[i]. className = "even";
+            } else {
+              rows[i]. className = "odd";
+            }
+          }
+        }
+      }
+    </script> 
+  </body>
+</html>

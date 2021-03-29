@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>FR13 | Chaining targets</title>
+    <!-- The style.css file allows you to change the look of your web pages.
+         If you include the next line in all your web pages, they will all share the same look.
+         This makes it easier to make new pages for your site. -->
+    <link href="/style.css" rel="stylesheet" type="text/css" media="all">
+    <!--<script src="targets.js"></script>-->
+  <style>
+    th {
+        text-align: left;
+    }
+    a {
+    text-decoration: none;
+    }
+    a:link, a:visited {
+        color: blue;
+    }
+    a:hover {
+        color: red;
+    }
+    .odd{background-color: white;}
+    .even{background-color: lightgray;}
+  </style>
+  </head>
+
+<!--
+  TODO:
+  - CHECKBOX TO AUTOREFRESH EVERY 60SEC
+  - COOLDOWN FOR THE REFRESH BUTTON ONLY IF 90 API REQUESTS PER MINUTE REACHED
+  - IF TARGET COUNT >90, PICK ONLY RANDOM 90
+  - ADD TIMER TO COOLDOWN AND/OR AUTOREFRESH
+-->
+
+  <body>
+    <p style="text-align:center">
+      <a href='index.html'>Home</a> | <strong><a href='targets.html'>Targets</a></strong> | <a href='members.html'>Members</a> | <a href='items.html'>Items</a> | <a href='chainingV2.html'>Chaining (WIP)</a>
+    </p>
+    <hr>
+    <button onclick="buildTable()">Load/Refresh</button>
+    <!--<button onclick="reloadPage()">Reload page</button> |-->
+    Your API key:<input id="apiInput" type="text" name="apiKey" value="">
+    <!--<button id="apiSubmit" onclick="storeAPIKey()">Submit</button> |-->
+    <input id="cbRefresh" onchange="storeRefreshState()" type="checkbox" name="checkboxState" disabled>Refresh automatically (every 60 seconds)
+    <!--Add target:<input id="newTarget" type="text" name="targetID" value=""> -->
+    <!--<button id="targetSubmit" onclick="addTargetID()">Submit</button> | -->
+    <button id="clearCookies" onclick="clearCookies()">Clear cookies</button>
+    <!--<a href="admin/login.php" style="appearance: button;text-decoration: none;-webkit-appearance: button;-moz-appearance: button;color: initial;">Login</a>-->
+    <!--<input type="button" onclick="location.href='admin/login.php';" value="Login" /> -->
+    <hr>
+    <table id="targets" style="width:100%">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Name</th>
+          <th>Actions</th>
+          <th>Lvl</th>
+          <th>HP</th>
+          <th>Last action</th>
+          <th>ID</th>
+        </tr>
+      <thead>
+      <tbody>
+      </tbody>
+    </table>
+    <hr>
+    <p style="text-align:center">
+      Questions? Ask <a href='https://www.torn.com/profiles.php?XID=2131931#/'>Raith [2131931]</a>.
+    </p>
+    
+    <script>
+      document.getElementById("apiInput").value = readAPIKey();
+      document.getElementById("cbRefresh").checked = readRefreshState();
+      var targetListLocation = "names.txt";
+      
+      function reloadPage () {
+      	window.location.reload(true);
+      }
+      
+      function buildTable() {
+        storeAPIKey();
+        
+        targets = document.getElementById("targets");
+        apiKeyValue = document.getElementById("apiInput").value;
+        
+        rowCount = targets.rows.length;
+        while(--rowCount) targets.deleteRow(rowCount); 
+        
+		function loadFromFileSync() {
+        filePath = targetListLocation;
+        result = null;
+        xmlhttp = new XMLHttpRequest();
+        xmlhttp.open("GET", filePath, false);
+        xmlhttp.send();
+        if (xmlhttp.status === 200) {
+              result = xmlhttp.responseText;
+			  return result;
+        }
+        
+      }
+      
+      function loadFromFileAsync() {
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.open("GET", targetListLocation, true);
+        xmlhttp.onload = function() {
+          if (xmlhttp.readyState === 4) {
+            if (xmlhttp.status === 200) {
+              return xmlhttp.responseText;
+            }
+          }
+        };
+        xmlhttp.send(null);
+      }
+        
+      //figure out and switch to Async loading, since Sync is deprecated
+      //targetIDs = loadFromFileSync().split("\n");
+      targetIDs = [2123478, 1779574, 1729823, 2089025, 1295571, 1978133, 1861308, 2020427, 2125591, 781650, 2057902, 2014239, 1938932, 1965284];
+
+      if (targetIDs == null || targetIDs == "") {
+      	return;
+      }
+
+      if (readAPIKey() <= 0) {
+        if (apiKeyValue <= 0) {
+          return; 
+        }
+      }
+
+      targetIDs.forEach(function populateTable(item, index) {
+        if (item == '' || item == null || item == '\n') {
+          //console.log("exit used");
+          return;
+        }
+        fetch('https://api.torn.com/user/'+item+'?selections=&key='+readAPIKey())
+          .then(function(response){return response.json();})
+          .then(function(myjson){
+         	row = targets.insertRow(1);
+
+            row.insertCell(0).innerHTML = myjson.status.description;
+            row.insertCell(1).innerHTML = myjson.name.link("https://www.torn.com/profiles.php?XID="+item);
+            row.insertCell(2).innerHTML = "Attack".link("https://www.torn.com/loader.php?sid=attack&user2ID="+item);
+            row.insertCell(3).innerHTML = myjson.level;
+            row.insertCell(4).innerHTML = myjson.life.current+"/"+myjson.life.maximum;
+            row.insertCell(5).innerHTML = myjson.last_action.relative;
+            row.insertCell(6).innerHTML = item;
+
+            alternate('targets');
+          });
+        });
+      }
+      
+      function setCookie(name, value) {
+        today = new Date();
+        expiry = new Date(today.getTime() + 30 * 24 * 3600 * 1000); // plus 30 days
+        document.cookie=name + "=" + escape(value) + "; path=/; expires=" + expiry.toGMTString();
+      }
+      
+      function getCookie(name) {
+        re = new RegExp(name + "=([^;]+)");
+        value = re.exec(document.cookie);
+        return (value != null) ? unescape(value[1]) : null;
+      }
+      
+      function deleteCookie(name) {
+        today = new Date();
+        expired = new Date(today.getTime() - 24 * 3600 * 1000);
+        document.cookie = name + "=null; path=/; expires=" + expired.toGMTString();
+      }
+      
+      function clearCookies() {
+        deleteCookie("apiKey");
+        deleteCookie("refreshState");
+      }
+      
+      function storeRefreshState() {
+        setCookie("refreshState", document.getElementById("cbRefresh").checked);
+      }
+      
+      function readRefreshState() {
+        return (getCookie("refreshState") == 'true');
+      }
+      
+      function storeAPIKey() {        
+        setCookie("apiKey", document.getElementById("apiInput").value);
+      }
+      
+      function readAPIKey() {
+        return getCookie("apiKey");
+      }
+      
+      function isNumeric(n) {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+      }
+      
+      function alternate(id) {
+        if (document.getElementsByTagName) {
+          var table = document.getElementById(id);
+          var rows = table.getElementsByTagName("tr");
+          
+          for (i = 0; i < rows.length; i++) {
+            if (i != 0 && i % 2 == 0) {
+              rows[i]. className = "even";
+            } else {
+              rows[i]. className = "odd";
+            }
+          }
+        }
+      }
+      
+    </script> 
+  </body>
+</html>

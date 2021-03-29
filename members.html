@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>FR13 | Faction Members</title>
+    <!-- The style.css file allows you to change the look of your web pages.
+         If you include the next line in all your web pages, they will all share the same look.
+         This makes it easier to make new pages for your site. -->
+    <link href="/style.css" rel="stylesheet" type="text/css" media="all">
+  <style>
+    th {
+      text-align: left;
+    }
+    a {
+      text-decoration: none;
+    }
+    a:link, a:visited {
+      color: blue;
+    }
+    a:hover {
+      color: red;
+    }
+    m {
+      text-align: center;
+    }
+    .odd{background-color: white;}
+    .even{background-color: lightgray;}
+  </style>
+  </head>
+
+  <body>
+    <p style="text-align:center">
+      <a href='index.html'>Home</a> | <a href='targets.html'>Targets</a> | <strong><a href='members.html'>Members</a></strong> | <a href='items.html'>Items</a> | <a href='chainingV2.html'>Chaining (WIP)</a>
+    </p>
+    <hr>
+    <button onclick="buildTable()">Load/Refresh</button>
+    Your API key:<input id="apiInput" type="text" name="apiKey" value="">
+    <!--<button id="apiSubmit" onclick="storeAPIKey()">Submit</button> |-->
+    Faction ID:<input id="factionIDInput" type="text" name="factionID" value="">
+    <!--<button id="IDSubmit" onclick="storeFactionID()">Submit</button> |-->
+    <button id="clearCookies" onclick="clearCookies()">Clear cookies</button>
+    <hr>
+    <table id="members" style="width:100%">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Days in faction</th>
+          <th>Last action</th>
+          <th>ID</th>
+          <th>Recommendation</th>
+        </tr>
+      <thead>
+      <tbody>
+      </tbody>
+    </table>
+    <hr>
+    <p style="text-align:center">
+      Questions? Ask <a href='https://www.torn.com/profiles.php?XID=2131931#/'>Raith [2131931]</a>.
+    </p>
+    
+    <script>
+      document.getElementById("apiInput").value = readAPIKey();
+      document.getElementById("factionIDInput").value = readFactionID();
+      
+      function buildTable() {
+        storeAPIKey();
+        storeFactionID();
+        
+        members = document.getElementById("members");
+        apiKeyValue = document.getElementById("apiInput").value;
+        factionIDValue = document.getElementById("factionIDInput").value;
+        
+        rowCount = members.rows.length;
+        while(--rowCount) members.deleteRow(rowCount); 
+        
+        if (readAPIKey() <= 0) {
+          if (apiKeyValue <= 0) {
+            return; 
+          }
+        }
+        
+        if (readFactionID() <= 0) {
+          if (factionIDValue <= 0) {
+            return;
+          }
+        }
+        
+        fetch('https://api.torn.com/faction/'+readFactionID()+'?selections=&key='+readAPIKey())
+          .then(function(response){return response.json();})
+          .then(function(myjson){
+          m = myjson.members;
+
+          for (var prop in myjson.members) {
+            member = myjson.members[prop];
+
+            row = members.insertRow(1);
+
+            row.insertCell(0).innerHTML = member.name;
+            row.insertCell(1).innerHTML = member.days_in_faction;
+            row.insertCell(2).innerHTML = member.last_action.relative;
+            row.insertCell(3).innerHTML = prop;
+
+            lastAction = member.last_action.relative.match(/\d+/g).pop();
+            firstLetter = member.last_action.relative.match(/[a-zA-Z]/).pop();
+            
+            if ('d' ==  firstLetter) {
+              if (lastAction < 7) {
+              	recommendation = 'Good';
+                if (lastAction >= 1) {
+                  recommendation += ', but no OC'
+                }
+              } else if (member.days_in_faction == lastAction) {
+                recommendation = 'Kick now';
+              } else if (lastAction >= 14) {
+                recommendation = 'Kick, unless gave notice';
+              } else if (lastAction >= 7) {
+                recommendation = 'Kick soon'
+              } else {
+                recommendation = '?';
+              }
+            } else {
+              recommendation = 'Good';
+            }
+            
+            row.insertCell(4).innerHTML = recommendation;
+
+            sortTable();
+            
+            alternate('members');
+          };
+        });
+      }
+      
+      function sortTable() {
+        var table, rows, switching, i, x, y, shouldSwitch;
+        table = document.getElementById("members");
+        switching = true;
+        /*Make a loop that will continue until
+  		no switching has been done:*/
+        while (switching) {
+          //start by saying: no switching is done:
+          switching = false;
+          rows = table.rows;
+          /*Loop through all table rows (except the
+    	  first, which contains table headers):*/
+          for (i = 1; i < (rows.length - 1); i++) {
+            //start by saying there should be no switching:
+            shouldSwitch = false;
+            /*Get the two elements you want to compare,
+      		one from current row and one from the next:*/
+            x = rows[i].getElementsByTagName("td")[0];
+            y = rows[i + 1].getElementsByTagName("td")[0];
+            //check if the two rows should switch place:
+            if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+              //if so, mark as a switch and break the loop:
+              shouldSwitch = true;
+              break;
+            }
+          }
+          if (shouldSwitch) {
+            /*If a switch has been marked, make the switch
+      		and mark that a switch has been done:*/
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+          }
+        }
+      }
+      
+      function setCookie(name, value) {
+        today = new Date();
+        expiry = new Date(today.getTime() + 30 * 24 * 3600 * 1000); // plus 30 days
+        document.cookie=name + "=" + escape(value) + "; path=/; expires=" + expiry.toGMTString();
+      }
+      
+      function getCookie(name) {
+        re = new RegExp(name + "=([^;]+)");
+        value = re.exec(document.cookie);
+        return (value != null) ? unescape(value[1]) : null;
+      }
+      
+      function deleteCookie(name) {
+        today = new Date();
+        expired = new Date(today.getTime() - 24 * 3600 * 1000);
+        document.cookie = name + "=null; path=/; expires=" + expired.toGMTString();
+      }
+      
+      function clearCookies() {
+        deleteCookie("apiKey");
+      }
+      
+      function storeAPIKey() {        
+        setCookie("apiKey", document.getElementById("apiInput").value);
+      }
+      
+      function readAPIKey() {
+        return getCookie("apiKey");
+      }
+      
+      function storeFactionID() {
+        setCookie("factionID", document.getElementById("factionIDInput").value);
+      }
+      
+      function readFactionID() {
+        return getCookie("factionID");
+      }
+      
+      function isNumeric(n) {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+      }
+          
+      function alternate(id) {
+        if (document.getElementsByTagName) {
+          var table = document.getElementById(id);
+          var rows = table.getElementsByTagName("tr");
+          
+          for (i = 0; i < rows.length; i++) {
+            if (i != 0 && i % 2 == 0) {
+              rows[i]. className = "even";
+            } else {
+              rows[i]. className = "odd";
+            }
+          }
+        }
+      }
+    </script> 
+  </body>
+</html>

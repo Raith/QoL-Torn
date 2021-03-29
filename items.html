@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>FR13 | Item lookup</title>
+    <!-- The style.css file allows you to change the look of your web pages.
+         If you include the next line in all your web pages, they will all share the same look.
+         This makes it easier to make new pages for your site. -->
+    <link href="../style.css" rel="stylesheet" type="text/css">
+  <style>
+    th {
+      text-align: left;
+    }
+    a {
+      text-decoration: none;
+    }
+    a:link, a:visited {
+      color: blue;
+    }
+    a:hover {
+      color: red;
+    }
+    m {
+      text-align: center;
+    }
+  </style>
+  </head>
+
+  <body>
+    <p style="text-align:center">
+      <a href='index.html'>Home</a> | <a href='targets.html'>Targets</a> | <a href='members.html'>Members</a> | <strong><a href='items.html'>Items</a></strong> | <a href='chainingV2.html'>Chaining (WIP)</a>
+    </p>
+    <hr>
+    <button onclick="buildTable()">Load/Refresh</button>
+    <button onclick="sortTable()" disabled>Sort by ID (descending)</button>
+    Your API key:<input id="apiInput" type="text" name="apiKey" value="">
+    <!--<button id="apiSubmit" onclick="storeAPIKey()">Submit</button>-->
+    Item IDs (comma separated):<input id="itemIDInput" type="text" name="itemID" value="">
+    <!--<button id="itemIDSubmit" onclick="storeItemID()">Submit</button>-->
+    <button id="clearCookies" onclick="clearCookies()">Clear cookies</button>
+    Get item IDs <a href='https://www.tornstats.com/items.php' target='_blank'>here</a>.
+    <hr>
+    <table id="itemInfo" style="width:100%">
+          <th>ID</th>
+          <th>Name</th>
+          <th>Market average</th>
+          <th>Shop sell</th>
+          <th>Shop buy</th>
+          <th>Listings (market/bazaar) (TBD)</th>
+          <th>Cheapest (market/baraar) (TBD)</th>
+    </table>
+    <hr>
+    <p style="text-align:center">
+      Questions? Ask <a href='https://www.torn.com/profiles.php?XID=2131931#/'>Raith [2131931]</a>.
+    </p>
+    
+    <script>
+      document.getElementById("apiInput").value = readAPIKey();
+      document.getElementById("itemIDInput").value = readItemID();
+      //var itemID = 0;     
+      //var item_ = null;x
+      
+      function buildTable() {
+        storeAPIKey();
+        storeItemID();
+        
+        itemInfo = document.getElementById("itemInfo");
+        apiKeyValue = document.getElementById("apiInput").value;
+        itemIDValue = document.getElementById("itemIDInput").value;
+        
+        rowCount = itemInfo.rows.length;
+        while(--rowCount) itemInfo.deleteRow(rowCount); 
+        
+        if (readAPIKey() <= 0) {
+          if (apiKeyValue <= 0) {
+            return; 
+          }
+        }
+        
+        if (itemIDValue <= "") {
+          if (readItemID() <= "") {
+            itemIDValue = 
+              //plushies
+              '186,187,215,258,261,266,268,269,273,274,281,384,618,' +
+              //flowers
+              '260,263,264,267,271,272,276,277,282,385,617'
+          }
+        }
+
+        //itemIDValue = itemIDValue.split(',').reverse().join(',');
+        
+        fetch('https://api.torn.com/torn/'+itemIDValue+'?selections=items&key='+readAPIKey())
+          .then(function(response){return response.json();})
+          .then(function(myjson){return myjson.items;})
+          .then(function(items) {
+
+          for (id in items) {
+            row = itemInfo.insertRow(1);
+
+            row.insertCell(0).innerHTML = id;
+            row.insertCell(1).innerHTML = items[id].name;
+            row.insertCell(2).innerHTML = items[id].market_value;
+            row.insertCell(3).innerHTML = items[id].sell_price;
+            row.insertCell(4).innerHTML = items[id].buy_price;
+          }
+        });
+        sortTable();
+      }
+      
+			<!-- does not sort properly? -->
+      function sortTable() {
+        var table, rows, switching, i, x, y, shouldSwitch;
+        table = document.getElementById("itemInfo");
+        switching = true;
+        /*Make a loop that will continue until
+  		no switching has been done:*/
+        while (switching) {
+          //start by saying: no switching is done:
+          switching = false;
+          rows = table.rows;
+          /*Loop through all table rows (except the
+    	  first, which contains table headers):*/
+          for (i = 1; i < (rows.length - 1); i++) {
+            //start by saying there should be no switching:
+            shouldSwitch = false;
+            /*Get the two elements you want to compare,
+      		one from current row and one from the next:*/
+            x = rows[i].getElementsByTagName("td")[1];
+            y = rows[i + 1].getElementsByTagName("td")[1];
+            //check if the two rows should switch place:
+            if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+              //if so, mark as a switch and break the loop:
+              shouldSwitch = true;
+              break;
+            }
+          }
+          if (shouldSwitch) {
+            /*If a switch has been marked, make the switch
+      		and mark that a switch has been done:*/
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+          }
+        }
+      }
+      
+      function setCookie(name, value) {
+        today = new Date();
+        expiry = new Date(today.getTime() + 30 * 24 * 3600 * 1000); // plus 30 days
+        document.cookie=name + "=" + escape(value) + "; path=/; expires=" + expiry.toGMTString();
+      }
+      
+      function getCookie(name) {
+        re = new RegExp(name + "=([^;]+)");
+        value = re.exec(document.cookie);
+        return (value != null) ? unescape(value[1]) : null;
+      }
+      
+      function deleteCookie(name) {
+        today = new Date();
+        expired = new Date(today.getTime() - 24 * 3600 * 1000);
+        document.cookie = name + "=null; path=/; expires=" + expired.toGMTString();
+      }
+      
+      function clearCookies() {
+        deleteCookie("apiKey");
+        deleteCookie("itemID");
+      }
+      
+      function storeAPIKey() {        
+        setCookie("apiKey", document.getElementById("apiInput").value);
+      }
+      
+      function readAPIKey() {
+        return getCookie("apiKey");
+      }
+      
+      function storeItemID() {
+        setCookie("itemID", document.getElementById("itemIDInput").value);
+        //itemID = document.getElementById("itemIDInput").value;
+      }
+      
+      function readItemID() {
+        return getCookie("itemID");
+      }
+      
+      function isNumeric(n) {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+      }
+      
+      function alternate(id) {
+        if (document.getElementsByTagName) {
+          var table = document.getElementById(id);
+          var rows = table.getElementsByTagName("tr");
+
+          for (i = 0; i < rows.length; i++) {
+            if (i != 0 && i % 2 == 0) {
+              rows[i]. className = "even";
+            } else {
+              rows[i]. className = "odd";
+            }
+          }
+        }
+      }
+    </script> 
+  </body>
+</html>
